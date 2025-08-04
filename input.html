@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Subdomain Scanner</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #0f2027, #203a43, #2c5364); /* dark blue-black gradient */
+      color: #f1f1f1;
+      padding: 40px;
+    }
+    h1 {
+      color: #00d9ff;
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 60%;
+      padding: 12px;
+      margin: 20px auto;
+      display: block;
+      border: 1px solid #555;
+      border-radius: 8px;
+      font-size: 16px;
+      background-color: #222;
+      color: #fff;
+    }
+    button {
+      background-color: #007acc;
+      color: white;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: block;
+      margin: 0 auto 30px;
+    }
+    button:hover {
+      background-color: #005eaa;
+    }
+    section {
+      background: #1c1f26;
+      padding: 20px;
+      margin: 20px auto;
+      border-radius: 10px;
+      max-width: 90%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    h2 {
+      color: #55e3fc;
+      margin-top: 0;
+    }
+    pre {
+      background: #2c303a;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-size: 14px;
+      color: #f1f1f1;
+    }
+    .httpx-card {
+      background: #2b3440;
+      border-left: 4px solid #00c3ff;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+    }
+    .dir-path {
+      background: #3b3f4a;
+      border-left: 3px solid #888;
+      padding-left: 10px;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌐 Subdomain Enumeration Tool</h1>
+
+  <input type="text" id="domain" placeholder="Enter domain name (e.g. example.com)">
+  <button onclick="startScan()">Start Scan</button>
+
+  <section>
+    <h2>🔍 Sublist3r Output</h2>
+    <pre id="sublist3r-results">Waiting for scan...</pre>
+  </section>
+
+  <section>
+    <h2>🌐 HTTPX Output</h2>
+    <div id="httpx-results">Waiting for scan...</div>
+  </section>
+
+  <section>
+    <h2>📂 Dirsearch Output</h2>
+    <div id="dirsearch-results">Waiting for scan...</div>
+  </section>
+
+  <script>
+    async function startScan() {
+      const domain = document.getElementById("domain").value.trim();
+      if (!domain) {
+        alert("Please enter a domain.");
+        return;
+      }
+
+      // Sublist3r
+      const res1 = await fetch("/scan_sublist3r", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain })
+      });
+      const subData = await res1.json();
+      if (subData.status !== "ok") {
+        document.getElementById("sublist3r-results").textContent = "❌ Error running Sublist3r.";
+        return;
+      }
+      document.getElementById("sublist3r-results").textContent = subData.subdomains.join("\n");
+
+      // HTTPX
+      const res2 = await fetch("/scan_httpx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ output_dir: subData.output_dir })
+      });
+      const httpxData = await res2.json();
+      if (httpxData.status !== "ok") {
+        document.getElementById("httpx-results").innerHTML = "❌ Error running HTTPX.";
+        return;
+      }
+
+      const httpxOutput = httpxData.httpx.map(entry => `
+        <div class="httpx-card">
+          <strong>URL:</strong> ${entry.url || 'N/A'}<br>
+          <strong>Title:</strong> ${entry.title || 'N/A'}<br>
+          <strong>Status:</strong> ${entry.status_code || entry.port || 'N/A'}<br>
+          <strong>Webserver:</strong> ${entry.webserver || 'N/A'}<br>
+          <strong>CDN:</strong> ${entry.cdn_name || 'N/A'} (${entry.cdn_type || 'N/A'})
+        </div>
+      `).join("");
+      document.getElementById("httpx-results").innerHTML = httpxOutput;
+
+      // Dirsearch
+      const res3 = await fetch("/scan_dirsearch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ output_dir: subData.output_dir })
+      });
+      const dirData = await res3.json();
+      if (dirData.status !== "ok") {
+        document.getElementById("dirsearch-results").innerHTML = "❌ Error running Dirsearch.";
+        return;
+      }
+
+      let dirOutput = "";
+      dirData.dirsearch.forEach(entry => {
+        dirOutput += `<strong>Subdomain: ${entry.subdomain}</strong><br>`;
+        entry.paths.forEach(p => {
+          dirOutput += `<div class="dir-path">${p}</div>`;
+        });
+        dirOutput += `<br>`;
+      });
+      document.getElementById("dirsearch-results").innerHTML = dirOutput;
+    }
+  </script>
+</body>
+</html>
